@@ -2,8 +2,10 @@ import re
 from collections import Counter
 import sys
 import math
+import gzip
+import json
 
-def parser(path, threshold):
+def parser(path, threshold, repotType):
     pattern = r'^(\S+) .*? \[(.*?)\] "(\S+) (\S+) \S+" (\d+) (\d+|-)'
 
     corruptedLines = 0
@@ -20,7 +22,13 @@ def parser(path, threshold):
     # this is for tracking 5xx errors
     internalError = dict()
 
-    with open(path, 'r') as file:
+    openType = open
+    mode = 'r'
+    if path.endswith('.gz'):
+        openType = gzip.open
+        mode = 'rt'
+    
+    with openType(path, mode) as file:
         for line in file:
             try:
                 match = re.match(pattern, line)
@@ -59,29 +67,55 @@ def parser(path, threshold):
                 corruptedLines += 1
                 continue
 
-    print(f"Total corrupted lines: {corruptedLines}")
-    print(f"Total requests: {totalRequests}")
-    print(f"Unique IPs: {len(ipSet)}")
-    print(f"Endpoint counts: {endpointCounter.most_common(2)}")
-    print(f"Error requests: {error}")
-    print(f"Correct lines: {correctLines}")
-    if correctLines > 0:
-        print(f"Error rate: {error / correctLines * 100:.2f}%")
+    if reportType == 'text':
+        print()
+        print(f"- Total corrupted lines: {corruptedLines}")
+        print("-----------------------------------------------------")
+        print(f"- Total requests: {totalRequests}")
+        print("-----------------------------------------------------")
+        print(f"- Unique IPs: {len(ipSet)}")
+        print("-----------------------------------------------------")
+        print(f"- Endpoint counts: {endpointCounter.most_common(10)}")
+        print("-----------------------------------------------------")
+        print(f"- Error requests: {error}")
+        print("-----------------------------------------------------")
+        print(f"- Correct lines: {correctLines}")
+        
+        errorRate = 0
+        if correctLines > 0:
+            errorRate = error / correctLines * 100
+        print(f"- Error Rate is {errorRate:.2f}")
+        
+        print(hourlyCounter)
+        print("-----------------------------------------------------")
+
+        for hour, count in hourlyCounter.items():
+            print(f"- Hour: {hour} " + f"  |  Requests count: {count}  |  ")
+            print("--------------------")
+        print("-----------------------------------------------------")
+
+        for ip, count in maliciousIp.items():
+            if count > threshold:
+                print(f"- Ip: {ip} had {count} accesses to login with 401 status code")
+        print("-----------------------------------------------------")
+
+        # TODO : not having 5xx error for an hour
+        lastRate = internalError.get("00")
+        for hour, count in internalError.items():
+            dif = count - lastRate
+            if dif > 500:
+                print(f"- Error rate in hour {hour} jumped by {dif} and reached {count} 5xx errors")
+            lastRate = count
     else:
-        print("Error rate: 0.00%")
-    print(hourlyCounter)
-
-    for hour, count in hourlyCounter.items():
-        print(f"Hour: {hour} " + f"  |  Requests count: {count}  |  ")
-        print("-------------")
-
-    for ip, count in maliciousIp.items():
-        if count > threshold:
-            print(f"Ip: {ip} had {count} accesses to login with 401 status code")
-
-    for hour, count in internalError.items():
-        if count > 500:
-            print(f"hour {hour} has had {count} number of 5xx errors")
+        # TODO: complete the json format
+        report = {
+            "requests": totalRequests,
+            "corrupted": corruptedLines,
+            "unique_ips": len(ipSet),
+            "top_endpoints": endpointCounter.most_common(10),
+            "error_rate": errorRate,
+            # "hourly_congestion": hou
+        }
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -93,4 +127,8 @@ if __name__ == "__main__":
         if len(sys.argv) > 2:
             threshold = int(sys.argv[2])
 
-        parser(path, threshold)
+        reportType = 'text'
+        if "--json" in sys.argv:
+            reportType = 'json'
+
+        parser(path, threshold, reportType)
