@@ -9,6 +9,8 @@ python3 main.py path-to-your-log-file --tl threshold-for-401-on-login-page --te 
 ```
 * ترتیب آرگومان ها اهمیت ندارد
 * تمام آرگومان ها به جز مسیر فایل لاگ اختیاری هستند و مقدار پیشفرض دارند:
+
+
 --tl مقدار پیش فرض 50 دارد
 
 --te مقدار پیشفرض 500 دارد
@@ -17,9 +19,11 @@ python3 main.py path-to-your-log-file --tl threshold-for-401-on-login-page --te 
 
 --json هم به عنوان فلگ استفاده می شود یعنی اگر وارد نشود خروجی text چاپ میشود
 
+--time اگر مقداری برای آن به صورت hour:minute:second وارد شود فقط لاگ های تا این زمان بررسی میشوند.
+
 نمونه یک دستور صحیح:
 ```
-python3 main.py /mnt/c/University/Hamravesh/access.log.gz --tl 500 --te 2000 --json --top 1
+python3 main.py /mnt/c/University/Hamravesh/access.log.gz --tl 500 --te 2000 --json --top 1 --time 01:02:03
 ```
 
 تصمیماتی که در پیاده سازی گرفتم :
