@@ -4,7 +4,7 @@ import argparse
 import gzip
 import json
 
-def parser(path, tLogin, tError, topN, reportType):
+def parser(path, tLogin, tError, topN, endInSec, reportType):
     pattern = r'^(\S+) .*? \[(.*?)\] "(\S+) (\S+) \S+" (\d+) (\d+|-)'
 
     corruptedLines = 0
@@ -32,18 +32,25 @@ def parser(path, tLogin, tError, topN, reportType):
         for line in file:
             try:
                 match = re.match(pattern, line)
-                totalRequests += 1
-
                 if not match:
                     raise ValueError("corrupted line")
                 
-                correctLines += 1
                 ip = match.group(1)
                 time = match.group(2)
                 endpoint = match.group(4)
                 statusCode = match.group(5)
-                hour = time.split(':')[1]
 
+                timeParts = time.split(':')
+                hour = timeParts[1]
+                minute = timeParts[2]
+                second = timeParts[3].split()[0]
+
+                currentTimeInSec = int(second) + int(minute) * 60 + int(hour) * 3600
+                if currentTimeInSec >= endInSec:
+                    break
+
+                totalRequests += 1
+                correctLines += 1
                 ipSet.add(ip)
                 endpointCounter[endpoint] += 1
                 hourlyCounter[hour] += 1
@@ -56,6 +63,7 @@ def parser(path, tLogin, tError, topN, reportType):
                         internalError[hour] += 1
 
             except ValueError:
+                totalRequests += 1
                 corruptedLines += 1
                 continue
 
@@ -131,8 +139,15 @@ if __name__ == "__main__":
     argParser.add_argument("--te", type=int, default=500, help="threshold for spikes in 5xx errors in an specific hour.")
     argParser.add_argument("--json", action="store_true", help="type of report would be json if this flag appears")
     argParser.add_argument("--top", type=int, default=10, help="show only top n endpoints")
+    argParser.add_argument("--time", type=str, default="24:00:00", help="logs after this hour:minute will not be processed")
 
     args = argParser.parse_args()
     reportType = 'json' if args.json else 'text'
 
-    parser(args.path, args.tl, args.te, args.top, reportType)
+    endTime = args.time
+    endHour = int(endTime.split(':')[0])
+    endMinute = int(endTime.split(':')[1])
+    endSecond = int(endTime.split(':')[2])
+    totalEndInSec = endSecond + endMinute * 60 + endHour * 3600
+
+    parser(args.path, args.tl, args.te, args.top, totalEndInSec, reportType)
