@@ -5,7 +5,7 @@
 با استفاده از دستور زیر فایل `main.py` را اجرا می کنیم:
 
 ```
-python3 main.py path-to-your-log-file --tl threshold-for-401-on-login-page --te threshold-for-5xx-errors --top top-n-endpoints --json if-json-output-needed
+python3 main.py path-to-your-log-file --tl threshold-for-401-on-login-page --te threshold-for-5xx-errors --top top-n-endpoints --json if-json-output-needed --time hour:minute:second
 ```
 * ترتیب آرگومان ها اهمیت ندارد
 * تمام آرگومان ها به جز مسیر فایل لاگ اختیاری هستند و مقدار پیشفرض دارند:
