@@ -4,3 +4,4 @@ Corrupted vnalvndlanvdljvnlsavdvnlv
 192.168.1.2 - - [14/May/2026:00:00:59 +0300] "POST /login HTTP/1.1" 401 512
 192.168.1.3 - - [14/May/2026:00:01:00 +0300] "GET /api/data HTTP/1.1" 500 256
 192.168.1.1 - - [14/May/2026:00:02:30 +0300] "GET /about HTTP/1.1" 200 128
+192.168.1.9 - - [14/May/2026] "GET /weird HTTP/1.1" 200 100

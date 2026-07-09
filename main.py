@@ -5,7 +5,7 @@ import gzip
 import json
 
 def parser(path, tLogin, tError, topN, endInSec, reportType):
-    pattern = r'^(\S+) .*? \[(.*?)\] "(\S+) (\S+) \S+" (\d+) (\d+|-)'
+    pattern = r'^(\S+) .*? \[(\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2} [+-]\d{4})\] "(\S+) (\S+) \S+" (\d+) (\d+|-)'
 
     corruptedLines = 0
     correctLines = 0
@@ -62,7 +62,7 @@ def parser(path, tLogin, tError, topN, endInSec, reportType):
                     elif statusCode.startswith('5'):
                         internalError[hour] += 1
 
-            except ValueError:
+            except Exception:
                 totalRequests += 1
                 corruptedLines += 1
                 continue
