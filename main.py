@@ -1,26 +1,26 @@
 import re
 from collections import Counter
-import sys
-import math
+import argparse
 import gzip
 import json
 
-def parser(path, threshold, repotType):
+def parser(path, tLogin, tError, topN, reportType):
     pattern = r'^(\S+) .*? \[(.*?)\] "(\S+) (\S+) \S+" (\d+) (\d+|-)'
 
     corruptedLines = 0
     correctLines = 0
     totalRequests = 0
+    errorRate = 0
     ipSet = set()
     endpointCounter = Counter()
     error = 0
     hourlyCounter = Counter()
 
     # this is for tracking 401 errors
-    maliciousIp = dict()
+    maliciousIp = Counter()
 
     # this is for tracking 5xx errors
-    internalError = dict()
+    internalError = Counter()
 
     openType = open
     mode = 'r'
@@ -40,10 +40,8 @@ def parser(path, threshold, repotType):
                 correctLines += 1
                 ip = match.group(1)
                 time = match.group(2)
-                method = match.group(3)
                 endpoint = match.group(4)
                 statusCode = match.group(5)
-                sizeInBytes = match.group(6)
                 hour = time.split(':')[1]
 
                 ipSet.add(ip)
@@ -53,19 +51,22 @@ def parser(path, threshold, repotType):
                 if (statusCode.startswith('4') or statusCode.startswith('5')):
                     error += 1
                     if statusCode == '401' and endpoint == '/login':
-                        if ip in maliciousIp:
-                            maliciousIp[ip] += 1
-                        else:
-                            maliciousIp[ip] = 1
+                        maliciousIp[ip] += 1
                     elif statusCode.startswith('5'):
-                        if hour in internalError:
-                            internalError[hour] += 1
-                        else:
-                            internalError[hour] = 1
+                        internalError[hour] += 1
 
             except ValueError:
                 corruptedLines += 1
                 continue
+
+    if correctLines > 0:
+        errorRate = f"{error / correctLines * 100:.2f}"
+
+    spikes = dict()
+    for hour, count in internalError.items():
+        if count > tError:
+            spikes[hour] = count
+
 
     if reportType == 'text':
         print()
@@ -75,60 +76,63 @@ def parser(path, threshold, repotType):
         print("-----------------------------------------------------")
         print(f"- Unique IPs: {len(ipSet)}")
         print("-----------------------------------------------------")
-        print(f"- Endpoint counts: {endpointCounter.most_common(10)}")
+        
+        print("endpoint" + 42 * " " + "usage")
+        print("--------" + 42 * " " + "-----")
+        for endpoint, count in endpointCounter.most_common(topN):
+            print(endpoint + " " * (50 - len(endpoint)) + str(count))
+            
         print("-----------------------------------------------------")
         print(f"- Error requests: {error}")
         print("-----------------------------------------------------")
         print(f"- Correct lines: {correctLines}")
-        
-        errorRate = 0
-        if correctLines > 0:
-            errorRate = error / correctLines * 100
-        print(f"- Error Rate is {errorRate:.2f}")
-        
-        print(hourlyCounter)
+        print("-----------------------------------------------------")
+        print(f"- Error Rate is {errorRate}")
         print("-----------------------------------------------------")
 
         for hour, count in hourlyCounter.items():
             print(f"- Hour: {hour} " + f"  |  Requests count: {count}  |  ")
-            print("--------------------")
         print("-----------------------------------------------------")
 
         for ip, count in maliciousIp.items():
-            if count > threshold:
+            if count > tLogin:
                 print(f"- Ip: {ip} had {count} accesses to login with 401 status code")
         print("-----------------------------------------------------")
 
-        # TODO : not having 5xx error for an hour
-        lastRate = internalError.get("00")
-        for hour, count in internalError.items():
-            dif = count - lastRate
-            if dif > 500:
-                print(f"- Error rate in hour {hour} jumped by {dif} and reached {count} 5xx errors")
-            lastRate = count
+        for hour, count in spikes.items():
+            print(f"- Error rate in hour {hour} spiked and reached {count} 5xx errors")
+
     else:
-        # TODO: complete the json format
         report = {
             "requests": totalRequests,
             "corrupted": corruptedLines,
             "unique_ips": len(ipSet),
-            "top_endpoints": endpointCounter.most_common(10),
+            "top_endpoints": endpointCounter.most_common(topN),
             "error_rate": errorRate,
-            # "hourly_congestion": hou
+            "hourly_congestion": {
+                hour: count for hour, count in hourlyCounter.items()
+            },
+            "malicious_IP": {
+                ip: count for ip, count in maliciousIp.items() if count > tLogin
+            },
+            "5xx_spikes": {
+                hour: count for hour, count in spikes.items()
+            }
         }
+        
+        jsonOutput = json.dumps(report, indent=4)
+        print(jsonOutput)
+
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Enter the path to file")
-    else:
-        path = sys.argv[1]
+    argParser = argparse.ArgumentParser(description="access log parser")
+    argParser.add_argument("path", help="path to log file (.log or .gz file)")
+    argParser.add_argument("--tl", type=int, default=50, help="threshold for malicious 401 errors on login page")
+    argParser.add_argument("--te", type=int, default=500, help="threshold for spikes in 5xx errors in an specific hour.")
+    argParser.add_argument("--json", action="store_true", help="type of report would be json if this flag appears")
+    argParser.add_argument("--top", type=int, default=10, help="show only top n endpoints")
 
-        threshold = 50
-        if len(sys.argv) > 2:
-            threshold = int(sys.argv[2])
+    args = argParser.parse_args()
+    reportType = 'json' if args.json else 'text'
 
-        reportType = 'text'
-        if "--json" in sys.argv:
-            reportType = 'json'
-
-        parser(path, threshold, reportType)
+    parser(args.path, args.tl, args.te, args.top, reportType)
